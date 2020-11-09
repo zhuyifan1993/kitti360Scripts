@@ -47,6 +47,7 @@ except:
 from kitti360scripts.helpers.annotation import Annotation3D, Annotation3DPly, global2local
 from kitti360scripts.helpers.project import Camera
 from kitti360scripts.helpers.labels import name2label, id2label, kittiId2label
+from scipy.spatial.transform import Rotation as Rot
 
 
 # the main class that parse fused point clouds
@@ -186,7 +187,7 @@ class Kitti360Viewer3D(object):
             # color = data[:, 3:6]
             # mask = np.logical_and(np.mean(color, 1) == 128, np.std(color, 1) == 0)
             # mask = 1 - mask
-            # pcd = pcd.select_by_index(np.where(mask)[0])
+            # data = data.select_by_index(np.where(mask)[0])
 
             mask = np.logical_not(data[:, 6] == 26)  # filter out car objects
             mask = 1 - mask
@@ -202,17 +203,17 @@ class Kitti360Viewer3D(object):
         #         globalIds = globalIds[np.where(isVisible)[0]]
         #
         #     ptsColor = self.assignColor(globalIds, colorType)
-        #     pcd.colors = open3d.utility.Vector3dVector(ptsColor)
+        #     data.colors = open3d.utility.Vector3dVector(ptsColor)
         # elif colorType == 'bbox':
-        #     ptsColor = np.asarray(pcd.colors)
-        #     pcd.colors = open3d.utility.Vector3dVector(ptsColor)
+        #     ptsColor = np.asarray(data.colors)
+        #     data.colors = open3d.utility.Vector3dVector(ptsColor)
         # elif colorType != 'rgb':
         #     raise ValueError("Color type can only be 'rgb', 'bbox', 'semantic', 'instance'!")
         #
         # if self.downSampleEvery > 1:
-        #     print(np.asarray(pcd.points).shape)
-        #     pcd = pcd.uniform_down_sample(self.downSampleEvery)
-        #     print(np.asarray(pcd.points).shape)
+        #     print(np.asarray(data.points).shape)
+        #     data = data.uniform_down_sample(self.downSampleEvery)
+        #     print(np.asarray(data.points).shape)
         return self.accumuData
 
     def loadWindows(self, colorType='semantic'):
@@ -317,29 +318,38 @@ if __name__ == '__main__':
 
         pcdFileList = v.annotation3DPly.pcdFileList
         for idx, pcdFile in enumerate(pcdFileList):
-            pcd = v.loadWindow(pcdFile, args.mode)[0]  # pcd contains cat category
-            if len(pcd) == 0:
+            data = v.loadWindow(pcdFile, args.mode)[0]  # data contains cat category
+            if len(data) == 0:
                 print('Warning: this point cloud doesnt contain cat category!')
                 continue
-            instanceid = np.unique(pcd[:, 7] % 1000).astype(np.int64)
+            instanceid = np.unique(data[:, 7] % 1000).astype(np.int64)
             sequence = pcdFile.split('\\')[-3]
             window = pcdFile.split('\\')[-1][:13]
             save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
                                      sequence, window)
             os.makedirs(save_fold, exist_ok=True)
+
             # save each cat object individually
+            windows_unique = np.unique(np.array(v.bboxes_window), axis=0)[0]
+            bboxes = [v.bboxes[i] for i in range(len(v.bboxes)) if v.bboxes_window[i][0] == windows_unique[0]]
             for ii, ind_id in enumerate(instanceid):
-                mask = np.where(pcd[:, 7] % 1000 == ind_id)
-                pcd_ori = pcd[mask][:, :3]
-                np.save(os.path.join(save_fold, str(ind_id) + '.npy'), pcd_ori)
+                mask = np.where(data[:, 7] % 1000 == ind_id)
+                pcd_ori = data[mask][:, :3]
+                # np.save(os.path.join(save_fold, str(ind_id) + '.npy'), pcd_ori)
+
+                bboxes_vet = np.array(bboxes[ii].vertices)
+                sx = np.linalg.norm(bboxes_vet[0] - bboxes_vet[5])
+                sy = np.linalg.norm(bboxes_vet[0] - bboxes_vet[2])
+                sz = np.linalg.norm(bboxes_vet[0] - bboxes_vet[1])
 
                 R = transformList[ii][:3, :3]
+                R = np.concatenate([R[:, 0] / sx, R[:, 1] / sy, R[:, 2] / sz]).reshape(3, 3).T
+                R = np.linalg.inv(R)
                 T = transformList[ii][:3, 3]
-                pcd_can = np.matmul(R.T, pcd_ori.transpose()).transpose() - R.T @ T
+                pcd_can = np.matmul(R, pcd_ori.transpose()).transpose() - R @ T
+                r = Rot.from_euler('x', -90, degrees=True)
+                pcd_can = r.apply(pcd_can)
                 np.save(os.path.join(save_fold, str(ind_id) + '_canonical.npy'), pcd_can)
-
-            # open3d.visualization.draw_geometries([pcd])
-            # open3d.io.write_point_cloud('car.ply', pcd)
 
     else:
         if not len(v.bboxes):
