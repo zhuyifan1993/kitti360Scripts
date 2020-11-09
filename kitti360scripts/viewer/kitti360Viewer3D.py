@@ -177,8 +177,11 @@ class Kitti360Viewer3D(object):
 
         if self.showVisibleOnly:
             ind = 8 if isLabeled else 6
-            isVisible = data[:, ind]
-            pcd = pcd.select_by_index(np.where(isVisible)[0])
+            mask = np.logical_and(data[:, 6] == 26, data[:, ind])
+            pcd = pcd.select_by_index(np.where(mask)[0])
+
+            data = data[mask.astype(np.bool), :]
+            self.accumuData.append(data)
         else:
             # color = data[:, 3:6]
             # mask = np.logical_and(np.mean(color, 1) == 128, np.std(color, 1) == 0)
@@ -193,24 +196,24 @@ class Kitti360Viewer3D(object):
             self.accumuData.append(data)
 
         # assign color
-        if colorType == 'semantic' or colorType == 'instance':
-            globalIds = data[:, 7]
-            if self.showVisibleOnly:
-                globalIds = globalIds[np.where(isVisible)[0]]
-
-            ptsColor = self.assignColor(globalIds, colorType)
-            pcd.colors = open3d.utility.Vector3dVector(ptsColor)
-        elif colorType == 'bbox':
-            ptsColor = np.asarray(pcd.colors)
-            pcd.colors = open3d.utility.Vector3dVector(ptsColor)
-        elif colorType != 'rgb':
-            raise ValueError("Color type can only be 'rgb', 'bbox', 'semantic', 'instance'!")
-
-        if self.downSampleEvery > 1:
-            print(np.asarray(pcd.points).shape)
-            pcd = pcd.uniform_down_sample(self.downSampleEvery)
-            print(np.asarray(pcd.points).shape)
-        return pcd
+        # if colorType == 'semantic' or colorType == 'instance':
+        #     globalIds = data[:, 7]
+        #     if self.showVisibleOnly:
+        #         globalIds = globalIds[np.where(isVisible)[0]]
+        #
+        #     ptsColor = self.assignColor(globalIds, colorType)
+        #     pcd.colors = open3d.utility.Vector3dVector(ptsColor)
+        # elif colorType == 'bbox':
+        #     ptsColor = np.asarray(pcd.colors)
+        #     pcd.colors = open3d.utility.Vector3dVector(ptsColor)
+        # elif colorType != 'rgb':
+        #     raise ValueError("Color type can only be 'rgb', 'bbox', 'semantic', 'instance'!")
+        #
+        # if self.downSampleEvery > 1:
+        #     print(np.asarray(pcd.points).shape)
+        #     pcd = pcd.uniform_down_sample(self.downSampleEvery)
+        #     print(np.asarray(pcd.points).shape)
+        return self.accumuData
 
     def loadWindows(self, colorType='semantic'):
         pcdFolder = 'static' if self.showStatic else 'dynamic'
@@ -228,6 +231,7 @@ class Kitti360Viewer3D(object):
 
     def loadBoundingBoxes(self):
 
+        transformList = []
         for globalId, v in self.annotation3D.objects.items():
             # skip dynamic objects
             if len(v) > 1:
@@ -243,10 +247,12 @@ class Kitti360Viewer3D(object):
                 mesh.triangles = open3d.utility.Vector3iVector(obj.faces)
                 color = self.assignColor(globalId, 'semantic')
                 semanticId, instanceId = global2local(globalId)
+                transformList.append(obj.transform)
                 mesh.paint_uniform_color(color.flatten())
                 mesh.compute_vertex_normals()
                 self.bboxes.append(mesh)
                 self.bboxes_window.append([obj.start_frame, obj.end_frame])
+        return transformList
 
     def loadBoundingBoxWireframes(self):
 
@@ -304,18 +310,36 @@ if __name__ == '__main__':
 
     v = Kitti360Viewer3D(args.sequence)
     if args.mode == 'bbox':
-        v.loadBoundingBoxes()
+        transformList = v.loadBoundingBoxes()
 
     if args.mode != 'bbox':
+        transformList = v.loadBoundingBoxes()
 
         pcdFileList = v.annotation3DPly.pcdFileList
         for idx, pcdFile in enumerate(pcdFileList):
-            pcd = v.loadWindow(pcdFile, args.mode)
-            if len(np.asarray(pcd.points)) == 0:
-                print('Warning: skipping empty point cloud!')
+            pcd = v.loadWindow(pcdFile, args.mode)[0]  # pcd contains cat category
+            if len(pcd) == 0:
+                print('Warning: this point cloud doesnt contain cat category!')
                 continue
-            open3d.visualization.draw_geometries([pcd])
-            open3d.io.write_point_cloud('car.ply', pcd)
+            instanceid = np.unique(pcd[:, 7] % 1000).astype(np.int64)
+            sequence = pcdFile.split('\\')[-3]
+            window = pcdFile.split('\\')[-1][:13]
+            save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
+                                     sequence, window)
+            os.makedirs(save_fold, exist_ok=True)
+            # save each cat object individually
+            for ii, ind_id in enumerate(instanceid):
+                mask = np.where(pcd[:, 7] % 1000 == ind_id)
+                pcd_ori = pcd[mask][:, :3]
+                np.save(os.path.join(save_fold, str(ind_id) + '.npy'), pcd_ori)
+
+                R = transformList[ii][:3, :3]
+                T = transformList[ii][:3, 3]
+                pcd_can = np.matmul(R.T, pcd_ori.transpose()).transpose() - R.T @ T
+                np.save(os.path.join(save_fold, str(ind_id) + '_canonical.npy'), pcd_can)
+
+            # open3d.visualization.draw_geometries([pcd])
+            # open3d.io.write_point_cloud('car.ply', pcd)
 
     else:
         if not len(v.bboxes):

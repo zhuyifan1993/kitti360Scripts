@@ -52,7 +52,7 @@ class KITTI360Object:
 
         # colormap
         self.cmap = cm.get_cmap('Set1')
-        self.cmap_length = 9 
+        self.cmap_length = 9
 
     def getColor(self, idx):
         if idx==0:
@@ -97,9 +97,12 @@ class KITTI360Bbox3D(KITTI360Object):
         self.meshes = []
 
         # name
-        self.name = '' 
+        self.name = ''
 
-    def __str__(self): 
+        # transfrom matrix
+        self.transform = None
+
+    def __str__(self):
         return self.name
 
     def generateMeshes(self):
@@ -107,12 +110,12 @@ class KITTI360Bbox3D(KITTI360Object):
         if self.vertices_proj:
             for fidx in range(self.faces.shape[0]):
                 self.meshes.append( [ Point(self.vertices_proj[0][int(x)], self.vertices_proj[1][int(x)]) for x in self.faces[fidx]] )
-                
+
     def parseOpencvMatrix(self, node):
         rows = int(node.find('rows').text)
         cols = int(node.find('cols').text)
         data = node.find('data').text.split(' ')
-    
+
         mat = []
         for d in data:
             d = d.replace('\n', '')
@@ -132,6 +135,7 @@ class KITTI360Bbox3D(KITTI360Object):
         vertices = np.matmul(R, vertices.transpose()).transpose() + T
         self.vertices = vertices
         self.faces = faces
+        self.transform = transform
 
     def parseBbox(self, child):
         semanticIdKITTI = int(child.find('semanticId').text)
@@ -151,9 +155,9 @@ class KITTI360Bbox3D(KITTI360Object):
         self.parseVertices(child)
 
     def parseStuff(self, child):
-        classmap = {'driveway': 'parking', 'ground': 'terrain', 'unknownGround': 'ground', 
+        classmap = {'driveway': 'parking', 'ground': 'terrain', 'unknownGround': 'ground',
                     'railtrack': 'rail track'}
-        label = child.find('label').text 
+        label = child.find('label').text
         if label in classmap.keys():
             label = classmap[label]
 
@@ -161,7 +165,7 @@ class KITTI360Bbox3D(KITTI360Object):
         self.end_frame = int(child.find('end_frame').text)
 
         self.semanticId = name2label[label].id
-        self.instanceId = 0 
+        self.instanceId = 0
         self.parseVertices(child)
 
 # Class that contains the information of the point cloud a single frame
@@ -180,13 +184,13 @@ class KITTI360Point3D(KITTI360Object):
         self.annotationId = -1
 
         # name
-        self.name = '' 
+        self.name = ''
 
         # color
         self.semanticColor = None
         self.instanceColor = None
 
-    def __str__(self): 
+    def __str__(self):
         return self.name
 
 
@@ -202,7 +206,7 @@ class Annotation2D:
         self.imgWidth  = 0
         # the height of that image and thus of the label image
         self.imgHeight = 0
-        
+
         self.instanceId = None
         self.semanticId = None
         self.instanceImg = None
@@ -215,7 +219,7 @@ class Annotation2D:
         self.cmap = cm.get_cmap(colormap)
 
         if colormap == 'Set1':
-            self.cmap_length = 9 
+            self.cmap_length = 9
         else:
             raise "Colormap length need to be specified!"
 
@@ -256,7 +260,7 @@ class Annotation2D:
             boundaryImg = self.toBoundaryImage(contourType=contourType, instanceOnly=True)
             self.instanceImg = self.instanceImg * (1-boundaryImg) + \
                     np.ones_like(self.instanceImg) * boundaryImg * 255
-        
+
 
     def toSemanticImage(self):
         self.semanticImg = np.zeros((self.semanticId.size, 3))
@@ -281,7 +285,7 @@ class Annotation2D:
         # semantic contours
         uniqueId = np.unique(self.semanticId)
         self.semanticContours = {}
-        for uid in uniqueId: 
+        for uid in uniqueId:
             mask = (self.semanticId==uid).astype(np.uint8) * 255
             mask_filter = filters.laplace(mask)
             self.semanticContours[uid] = np.expand_dims(np.abs(mask_filter)>0, 2)
@@ -304,14 +308,14 @@ class Annotation2D:
         else:
             raise ("Contour type can only be 'semantic' or 'instance'!")
 
-        if not instanceOnly: 
+        if not instanceOnly:
             boundaryImg = [contours[k] for k in contours.keys()]
         else:
             boundaryImg = [contours[k] for k in contours.keys() if global2local(k)[1]!=0]
         boundaryImg = np.sum(np.asarray(boundaryImg), axis=0)
         boundaryImg = boundaryImg>0
         return boundaryImg
-            
+
 
 class Annotation2DInstance:
     def __init__(self, gtPath, cam=0):
@@ -389,7 +393,7 @@ class Annotation3D:
         globalId = local2global(semanticId, instanceId)
         if globalId in self.objects.keys():
             # static object
-            if len(self.objects[globalId].keys())==1: 
+            if len(self.objects[globalId].keys())==1:
                 if -1 in self.objects[globalId].keys():
                     return self.objects[globalId][-1]
                 else:
@@ -428,7 +432,7 @@ class Annotation3DPly:
 
         pcdFolder = 'static' if self.showStatic else 'dynamic'
         self.pcdFileList = sorted(glob.glob(os.path.join(labelDir, sequence, pcdFolder, '*.ply')))
-        
+
         print('Found %d ply files in %s' % (len(self.pcdFileList), sequence))
 
     def readBinaryPly(self, pcdFile, n_pts):
@@ -470,7 +474,7 @@ class Annotation3DPly:
             f.write(b'property uchar blue\n')
             f.write(b'property int semantic\n')
 
-                    
+
 
 # a dummy example
 if __name__ == "__main__":
