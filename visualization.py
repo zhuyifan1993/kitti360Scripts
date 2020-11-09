@@ -23,14 +23,14 @@ def normalize_data(input_data):
     return output_data
 
 
-DATA_PATH = 'data_3d_car_pointcloud/2013_05_28_drive_0000_sync/000002_000385'
+DATA_PATH = 'data_3d_car_pointcloud/2013_05_28_drive_0000_sync/000372_000610'
 
-data = np.load(os.path.join(DATA_PATH, '1_canonical.npy'))
+data = np.load(os.path.join(DATA_PATH, '39_canonical.npy'))
 data = normalize_data(data)
 np.savetxt('scene1.txt', data)
 pcd = o3d.io.read_point_cloud('scene1.txt', format='xyz')
 aabb = pcd.get_axis_aligned_bounding_box()
 
 print(pcd)
-o3d.io.write_point_cloud('1.ply', pcd)
+o3d.io.write_point_cloud('39.ply', pcd)
 o3d.visualization.draw_geometries([pcd, aabb])

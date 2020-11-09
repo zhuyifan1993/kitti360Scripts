@@ -214,7 +214,7 @@ class Kitti360Viewer3D(object):
         #     print(np.asarray(data.points).shape)
         #     data = data.uniform_down_sample(self.downSampleEvery)
         #     print(np.asarray(data.points).shape)
-        return self.accumuData
+        return data
 
     def loadWindows(self, colorType='semantic'):
         pcdFolder = 'static' if self.showStatic else 'dynamic'
@@ -315,14 +315,21 @@ if __name__ == '__main__':
 
     if args.mode != 'bbox':
         transformList = v.loadBoundingBoxes()
+        tr_ind = 0
 
         pcdFileList = v.annotation3DPly.pcdFileList
         for idx, pcdFile in enumerate(pcdFileList):
-            data = v.loadWindow(pcdFile, args.mode)[0]  # data contains cat category
+            data = v.loadWindow(pcdFile, args.mode)  # data contains cat category
             if len(data) == 0:
                 print('Warning: this point cloud doesnt contain cat category!')
                 continue
-            instanceid = np.unique(data[:, 7] % 1000).astype(np.int64)
+            if idx == 0:
+                instanceid = np.unique(data[:, 7] % 1000).astype(np.int64)
+            else:
+                last_instanceid = instanceid
+                new_instanceid = np.unique(data[:, 7] % 1000).astype(np.int64)
+                instanceid = [new_instanceid[i] for i in range(len(new_instanceid)) if
+                              new_instanceid[i] not in last_instanceid]
             sequence = pcdFile.split('\\')[-3]
             window = pcdFile.split('\\')[-1][:13]
             save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
@@ -330,7 +337,7 @@ if __name__ == '__main__':
             os.makedirs(save_fold, exist_ok=True)
 
             # save each cat object individually
-            windows_unique = np.unique(np.array(v.bboxes_window), axis=0)[0]
+            windows_unique = np.unique(np.array(v.bboxes_window), axis=0)[idx]
             bboxes = [v.bboxes[i] for i in range(len(v.bboxes)) if v.bboxes_window[i][0] == windows_unique[0]]
             for ii, ind_id in enumerate(instanceid):
                 mask = np.where(data[:, 7] % 1000 == ind_id)
@@ -342,14 +349,15 @@ if __name__ == '__main__':
                 sy = np.linalg.norm(bboxes_vet[0] - bboxes_vet[2])
                 sz = np.linalg.norm(bboxes_vet[0] - bboxes_vet[1])
 
-                R = transformList[ii][:3, :3]
+                R = transformList[tr_ind][:3, :3]
                 R = np.concatenate([R[:, 0] / sx, R[:, 1] / sy, R[:, 2] / sz]).reshape(3, 3).T
                 R = np.linalg.inv(R)
-                T = transformList[ii][:3, 3]
+                T = transformList[tr_ind][:3, 3]
                 pcd_can = np.matmul(R, pcd_ori.transpose()).transpose() - R @ T
                 r = Rot.from_euler('x', -90, degrees=True)
                 pcd_can = r.apply(pcd_can)
                 np.save(os.path.join(save_fold, str(ind_id) + '_canonical.npy'), pcd_can)
+                tr_ind = tr_ind + 1
 
     else:
         if not len(v.bboxes):
