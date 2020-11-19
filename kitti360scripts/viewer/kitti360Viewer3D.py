@@ -233,6 +233,7 @@ class Kitti360Viewer3D(object):
     def loadBoundingBoxes(self):
 
         transformList = []
+        bboxidList = []
         for globalId, v in self.annotation3D.objects.items():
             # skip dynamic objects
             if len(v) > 1:
@@ -249,11 +250,12 @@ class Kitti360Viewer3D(object):
                 color = self.assignColor(globalId, 'semantic')
                 semanticId, instanceId = global2local(globalId)
                 transformList.append(obj.transform)
+                bboxidList.append(instanceId)
                 mesh.paint_uniform_color(color.flatten())
                 mesh.compute_vertex_normals()
                 self.bboxes.append(mesh)
                 self.bboxes_window.append([obj.start_frame, obj.end_frame])
-        return transformList
+        return transformList, bboxidList
 
     def loadBoundingBoxWireframes(self):
 
@@ -314,8 +316,8 @@ if __name__ == '__main__':
         transformList = v.loadBoundingBoxes()
 
     if args.mode != 'bbox':
-        transformList = v.loadBoundingBoxes()
-        tr_ind = 0
+        transformList, bboxidList = v.loadBoundingBoxes()
+        pclList = []
 
         pcdFileList = v.annotation3DPly.pcdFileList
         for idx, pcdFile in enumerate(pcdFileList):
@@ -330,34 +332,68 @@ if __name__ == '__main__':
                 new_instanceid = np.unique(data[:, 7] % 1000).astype(np.int64)
                 instanceid = [new_instanceid[i] for i in range(len(new_instanceid)) if
                               new_instanceid[i] not in last_instanceid]
-            sequence = pcdFile.split('\\')[-3]
-            window = pcdFile.split('\\')[-1][:13]
-            save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
-                                     sequence, window)
-            os.makedirs(save_fold, exist_ok=True)
+            for iid in instanceid:
+                mask = np.where(data[:, 7] % 1000 == iid)
+                pcd_ori = np.column_stack((data[mask][:, :3], data[mask][:, 7] % 1000))
+                pclList.append(pcd_ori)
+        pcl_dict = {}
+        for i, pcl in enumerate(pclList):
+            pcl_dict['pointcloud' + str(i)] = [int(pcl[0, 3]), pcl[:, :3]]
 
-            # save each cat object individually
-            windows_unique = np.unique(np.array(v.bboxes_window), axis=0)[idx]
-            bboxes = [v.bboxes[i] for i in range(len(v.bboxes)) if v.bboxes_window[i][0] == windows_unique[0]]
-            for ii, ind_id in enumerate(instanceid):
-                mask = np.where(data[:, 7] % 1000 == ind_id)
-                pcd_ori = data[mask][:, :3]
-                # np.save(os.path.join(save_fold, str(ind_id) + '.npy'), pcd_ori)
+        save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
+                                 'car')
+        os.makedirs(save_fold, exist_ok=True)
 
-                bboxes_vet = np.array(bboxes[ii].vertices)
-                sx = np.linalg.norm(bboxes_vet[0] - bboxes_vet[5])
-                sy = np.linalg.norm(bboxes_vet[0] - bboxes_vet[2])
-                sz = np.linalg.norm(bboxes_vet[0] - bboxes_vet[1])
+        for dist_key, dist_item in pcl_dict.items():
+            ins_id = dist_item[0]
+            pcd_ori = dist_item[1]
+            bboxid = bboxidList[0]
+            while bboxid in bboxidList:
+                if bboxid == ins_id:
+                    tr_ind = bboxid - 1
+                    bboxes_vet = np.array(v.bboxes[tr_ind].vertices)
+                    sx = np.linalg.norm(bboxes_vet[0] - bboxes_vet[5])
+                    sy = np.linalg.norm(bboxes_vet[0] - bboxes_vet[2])
+                    sz = np.linalg.norm(bboxes_vet[0] - bboxes_vet[1])
 
-                R = transformList[tr_ind][:3, :3]
-                R = np.concatenate([R[:, 0] / sx, R[:, 1] / sy, R[:, 2] / sz]).reshape(3, 3).T
-                R = np.linalg.inv(R)
-                T = transformList[tr_ind][:3, 3]
-                pcd_can = np.matmul(R, pcd_ori.transpose()).transpose() - R @ T
-                r = Rot.from_euler('x', -90, degrees=True)
-                pcd_can = r.apply(pcd_can)
-                np.save(os.path.join(save_fold, str(ind_id) + '_canonical.npy'), pcd_can)
-                tr_ind = tr_ind + 1
+                    R = transformList[tr_ind][:3, :3]
+                    R = np.concatenate([R[:, 0] / sx, R[:, 1] / sy, R[:, 2] / sz]).reshape(3, 3).T
+                    R = np.linalg.inv(R)
+                    T = transformList[tr_ind][:3, 3]
+                    pcd_can = np.matmul(R, pcd_ori.transpose()).transpose() - R @ T
+                    r = Rot.from_euler('x', -90, degrees=True)
+                    pcd_can = r.apply(pcd_can)
+                    np.save(os.path.join(save_fold, str(ins_id) + '_canonical.npy'), pcd_can)
+                bboxid = bboxid + 1
+
+        # sequence = pcdFile.split('\\')[-3]
+        # window = pcdFile.split('\\')[-1][:13]
+        # save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
+        #                          sequence, window)
+        # os.makedirs(save_fold, exist_ok=True)
+        #
+        # # save each cat object individually
+        # windows_unique = np.unique(np.array(v.bboxes_window), axis=0)[idx]
+        # bboxes = [v.bboxes[i] for i in range(len(v.bboxes)) if v.bboxes_window[i][0] == windows_unique[0]]
+        # for ii, ind_id in enumerate(instanceid):
+        #     mask = np.where(data[:, 7] % 1000 == ind_id)
+        #     pcd_ori = data[mask][:, :3]
+        #     # np.save(os.path.join(save_fold, str(ind_id) + '.npy'), pcd_ori)
+        #
+        #     bboxes_vet = np.array(bboxes[ii].vertices)
+        #     sx = np.linalg.norm(bboxes_vet[0] - bboxes_vet[5])
+        #     sy = np.linalg.norm(bboxes_vet[0] - bboxes_vet[2])
+        #     sz = np.linalg.norm(bboxes_vet[0] - bboxes_vet[1])
+        #
+        #     R = transformList[tr_ind][:3, :3]
+        #     R = np.concatenate([R[:, 0] / sx, R[:, 1] / sy, R[:, 2] / sz]).reshape(3, 3).T
+        #     R = np.linalg.inv(R)
+        #     T = transformList[tr_ind][:3, 3]
+        #     pcd_can = np.matmul(R, pcd_ori.transpose()).transpose() - R @ T
+        #     r = Rot.from_euler('x', -90, degrees=True)
+        #     pcd_can = r.apply(pcd_can)
+        #     np.save(os.path.join(save_fold, str(ind_id) + '_canonical.npy'), pcd_can)
+        #     tr_ind = tr_ind + 1
 
     else:
         if not len(v.bboxes):
