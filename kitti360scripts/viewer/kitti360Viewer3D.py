@@ -341,7 +341,7 @@ if __name__ == '__main__':
             pcl_dict['pointcloud' + str(i)] = [int(pcl[0, 3]), pcl[:, :3]]
 
         sequence = pcdFile.split('\\')[-3]
-        save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
+        save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_pointcloud',
                                  sequence, 'car')
         os.makedirs(save_fold, exist_ok=True)
 
