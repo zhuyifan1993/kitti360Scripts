@@ -366,8 +366,6 @@ if __name__ == '__main__':
                     np.save(os.path.join(save_fold, str(ins_id) + '_canonical.npy'), pcd_can)
                 bboxid = bboxid + 1
 
-
-
     else:
         if not len(v.bboxes):
             raise RuntimeError('No bounding boxes found! Please set KITTI360_DATASET in your environment path')
