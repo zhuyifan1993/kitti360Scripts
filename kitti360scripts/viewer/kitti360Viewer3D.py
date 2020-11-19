@@ -366,34 +366,7 @@ if __name__ == '__main__':
                     np.save(os.path.join(save_fold, str(ins_id) + '_canonical.npy'), pcd_can)
                 bboxid = bboxid + 1
 
-        # sequence = pcdFile.split('\\')[-3]
-        # window = pcdFile.split('\\')[-1][:13]
-        # save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
-        #                          sequence, window)
-        # os.makedirs(save_fold, exist_ok=True)
-        #
-        # # save each cat object individually
-        # windows_unique = np.unique(np.array(v.bboxes_window), axis=0)[idx]
-        # bboxes = [v.bboxes[i] for i in range(len(v.bboxes)) if v.bboxes_window[i][0] == windows_unique[0]]
-        # for ii, ind_id in enumerate(instanceid):
-        #     mask = np.where(data[:, 7] % 1000 == ind_id)
-        #     pcd_ori = data[mask][:, :3]
-        #     # np.save(os.path.join(save_fold, str(ind_id) + '.npy'), pcd_ori)
-        #
-        #     bboxes_vet = np.array(bboxes[ii].vertices)
-        #     sx = np.linalg.norm(bboxes_vet[0] - bboxes_vet[5])
-        #     sy = np.linalg.norm(bboxes_vet[0] - bboxes_vet[2])
-        #     sz = np.linalg.norm(bboxes_vet[0] - bboxes_vet[1])
-        #
-        #     R = transformList[tr_ind][:3, :3]
-        #     R = np.concatenate([R[:, 0] / sx, R[:, 1] / sy, R[:, 2] / sz]).reshape(3, 3).T
-        #     R = np.linalg.inv(R)
-        #     T = transformList[tr_ind][:3, 3]
-        #     pcd_can = np.matmul(R, pcd_ori.transpose()).transpose() - R @ T
-        #     r = Rot.from_euler('x', -90, degrees=True)
-        #     pcd_can = r.apply(pcd_can)
-        #     np.save(os.path.join(save_fold, str(ind_id) + '_canonical.npy'), pcd_can)
-        #     tr_ind = tr_ind + 1
+
 
     else:
         if not len(v.bboxes):
