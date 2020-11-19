@@ -178,7 +178,7 @@ class Kitti360Viewer3D(object):
 
         if self.showVisibleOnly:
             ind = 8 if isLabeled else 6
-            mask = np.logical_and(data[:, 6] == 26, data[:, ind])
+            mask = np.logical_and(data[:, 6] == 11, data[:, ind])
             pcd = pcd.select_by_index(np.where(mask)[0])
 
             data = data[mask.astype(np.bool), :]
@@ -189,7 +189,7 @@ class Kitti360Viewer3D(object):
             # mask = 1 - mask
             # data = data.select_by_index(np.where(mask)[0])
 
-            mask = np.logical_not(data[:, 6] == 26)  # filter out car objects
+            mask = np.logical_not(data[:, 6] == 11)  # filter out car objects
             mask = 1 - mask
             pcd = pcd.select_by_index(np.where(mask)[0])
 
@@ -239,7 +239,7 @@ class Kitti360Viewer3D(object):
             if len(v) > 1:
                 continue
             for obj in v.values():
-                if str(obj) is not 'car':
+                if str(obj) is not 'building':
                     continue
                 lines = np.array(obj.lines)
                 vertices = obj.vertices
@@ -323,7 +323,7 @@ if __name__ == '__main__':
         for idx, pcdFile in enumerate(pcdFileList):
             data = v.loadWindow(pcdFile, args.mode)  # data contains cat category
             if len(data) == 0:
-                print('Warning: this point cloud doesnt contain cat category!')
+                print('Warning: this point cloud doesnt contain car category!')
                 continue
             if idx == 0:
                 instanceid = np.unique(data[:, 7] % 1000).astype(np.int64)
@@ -342,7 +342,7 @@ if __name__ == '__main__':
 
         sequence = pcdFile.split('\\')[-3]
         save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_pointcloud',
-                                 sequence, 'car')
+                                 sequence, 'building')
         os.makedirs(save_fold, exist_ok=True)
 
         for dist_key, dist_item in pcl_dict.items():
