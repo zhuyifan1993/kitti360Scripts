@@ -340,8 +340,9 @@ if __name__ == '__main__':
         for i, pcl in enumerate(pclList):
             pcl_dict['pointcloud' + str(i)] = [int(pcl[0, 3]), pcl[:, :3]]
 
+        sequence = pcdFile.split('\\')[-3]
         save_fold = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'data_3d_car_pointcloud',
-                                 'car')
+                                 sequence, 'car')
         os.makedirs(save_fold, exist_ok=True)
 
         for dist_key, dist_item in pcl_dict.items():
